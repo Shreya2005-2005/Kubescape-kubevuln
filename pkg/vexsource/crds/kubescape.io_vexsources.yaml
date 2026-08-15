@@ -1,0 +1,187 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: vexsources.kubescape.io
+spec:
+  group: kubescape.io
+  names:
+    kind: VEXSource
+    listKind: VEXSourceList
+    plural: vexsources
+    shortNames:
+    - vexsrc
+    singular: vexsource
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.format
+      name: Format
+      type: string
+    - jsonPath: .spec.feedURL
+      name: URL
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          VEXSource declares an external VEX feed to fetch and apply against scan results.
+
+          This type intentionally mirrors pkg/securityexception/v1beta1.SecurityException: a plain
+          struct with no scheme registration, read via the dynamic client as unstructured, not a
+          registered, code-generated API type. That is the real, existing convention in this repo
+          for this kind of lightweight custom resource.
+
+          NOTE ON VALIDATION: the +kubebuilder markers below describe the schema this type expects,
+          but no CRD manifest is generated or installed from them as part of this change - there is
+          no controller-gen step wired into this repo's build, and no install path (this repo,
+          kubescape/helm-charts, or kubescape/kubescape) currently ships one. kubescape/kubescape
+          previously carried a hand-maintained CRD for SecurityException that was removed for being
+          orphaned and uninstallable (never wired to a real install path). Writing another
+          disconnected CRD file here would repeat that exact mistake. The markers are left as a
+          precise, single-source-of-truth spec for whoever does wire up real installation later.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: VEXSourceSpec defines the desired state of a VEXSource.
+            properties:
+              feedURL:
+                description: FeedURL is the HTTPS address the fetcher retrieves the
+                  VEX document from.
+                pattern: ^https://
+                type: string
+              format:
+                description: Format is the wire format of the document at FeedURL.
+                enum:
+                - openvex
+                - csaf
+                type: string
+              imageMatch:
+                description: |-
+                  ImageMatch scopes this feed to specific images, as Go path.Match glob patterns
+                  (e.g. "docker.io/library/nginx*", "*.redhat.io/*") evaluated against the full
+                  image reference. An empty list means the feed is considered for every scanned
+                  image - MinItems=1 below exists so an accidentally-empty list fails loudly at
+                  apply time instead of silently matching everything.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              refreshInterval:
+                default: 6h
+                description: |-
+                  RefreshInterval is how often the feed should be re-fetched. Empty means the
+                  default below applies.
+                type: string
+            required:
+            - feedURL
+            - format
+            type: object
+          status:
+            description: |-
+              VEXSourceStatus reports the observed state of a VEXSource's fetch history.
+
+              This is modeled after a real gap identified while reading a related POC (Ady0333/kubevuln#1):
+              a feed that starts failing silently is worse than one that was never configured, so the
+              fetcher (a later piece, not this one) needs somewhere to honestly record what happened on
+              its last attempt.
+            properties:
+              conditions:
+                description: Conditions is the observed state, using VEXSourceConditionType
+                  values.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastError:
+                description: |-
+                  LastError is the error message from the most recent failed fetch attempt, if any.
+                  Cleared on the next successful fetch.
+                type: string
+              lastFetchTime:
+                description: LastFetchTime is when the fetcher last attempted to retrieve
+                  this feed, successful or not.
+                format: date-time
+                type: string
+              lastSuccessTime:
+                description: LastSuccessTime is when the fetcher last successfully
+                  retrieved and parsed this feed.
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
